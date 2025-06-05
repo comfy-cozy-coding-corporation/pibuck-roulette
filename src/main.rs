@@ -4,6 +4,7 @@ use std::io::{BufReader, Write};
 use std::ops::Deref;
 use clap::Parser;
 use console::{Emoji, style};
+use regex::bytes;
 use sedregex::ReplaceCommand;
 
 #[derive(Parser, Debug)]
@@ -48,12 +49,16 @@ fn patch_game(binary_path: String) {
     // Load file
     let contents = fs::read(binary_path.clone()).expect("File could not be read!");
     // Patch binary content
-    let mut new = ReplaceCommand::new(r"s/properties\.stat_number_of_deaths += 1/properties\.stat_number_of_deaths += 1\n\tprint('player_shot')/1").expect("Could not patch game!").execute(contents);
-    new = ReplaceCommand::new(r"s/DeathRequest(shot_from_direction/DeathRequest(shot_fro/1").expect("Could not patch game!").execute(new);
-    new = ReplaceCommand::new(r"s/UserDeath_ThirdPerson(shot_from_direction/UserDeath_ThirdPerson(shot_fro/1").expect("Could not patch game!").execute(new);
+    let regex = bytes::Regex::new(r"s/properties\.stat_number_of_deaths += 1/properties\.stat_number_of_deaths += 1\n\tprint('player_shot')/1").expect("Could not create replacement regex!");
+    let mut new = regex.replace(&contents, b"");
+    
+    
+    //let mut new = ReplaceCommand::new(r"s/properties\.stat_number_of_deaths += 1/properties\.stat_number_of_deaths += 1\n\tprint('player_shot')/1").expect("Could not patch game!").execute(contents);
+    //new = ReplaceCommand::new(r"s/DeathRequest(shot_from_direction/DeathRequest(shot_fro/1").expect("Could not patch game!").execute(new);
+    //new = ReplaceCommand::new(r"s/UserDeath_ThirdPerson(shot_from_direction/UserDeath_ThirdPerson(shot_fro/1").expect("Could not patch game!").execute(new);
     
     // Write new binary
     let mut file = OpenOptions::new().write(true).truncate(true).open(binary_path).expect("Could not open file!");
-    file.write(new.as_bytes()).expect("Could not write new binary!");
+    file.write(&new).expect("Could not write new binary!");
 }
 

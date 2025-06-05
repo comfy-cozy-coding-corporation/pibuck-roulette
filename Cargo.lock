@@ -223,6 +223,7 @@ dependencies = [
  "console",
  "env_logger",
  "log",
+ "regex",
  "sedregex",
 ]
 
