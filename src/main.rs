@@ -8,7 +8,7 @@ use clap::Parser;
 use console::{Emoji, style};
 use log::{error, LevelFilter};
 use pishock_rs::interpolation::ShockPoint;
-use pishock_rs::PiShocker;
+use pishock_rs::{PiShockAccount, PiShocker};
 use regex::bytes;
 use sedregex::ReplaceCommand;
 
@@ -49,6 +49,7 @@ async fn main() {
     let binary_path = args.binary_file;
     write_welcome_message();
     patch_game(binary_path.clone());
+    
     run_game(binary_path).await;
 }
 
@@ -56,14 +57,14 @@ fn patch_game(binary_path: String) {
     // Load file
     let contents = fs::read(binary_path.clone()).expect("File could not be read!");
     // Patch binary content
-    let mut regex = bytes::Regex::new(r"properties\.stat_number_of_deaths \+= 1").expect("Could not create replacement regex!");
-    let mut new = regex.replace(&contents, b"properties.stat_number_of_deaths += 1\n\tprint('player_shot')");
+    let mut regex = bytes::Regex::new(r"speaker_glimpse.pitch_scale = randf_range\(.8, 1\)").expect("Could not create replacement regex!");
+    let new = regex.replace(&contents, b"print('player_shot'                            )");
 
-    regex = bytes::Regex::new(r"DeathRequest\(shot_from_direction").expect("Could not create replacement regex!");
-    new = regex.replace(&contents, b"DeathRequest(shot_fro");
-
-    regex = bytes::Regex::new(r"UserDeath_ThirdPerson\(shot_from_direction").expect("Could not create replacement regex!");
-    new = regex.replace(&contents, b"UserDeath_ThirdPerson(shot_fro");
+    // regex = bytes::Regex::new(r"DeathRequest\(shot_from_direction").expect("Could not create replacement regex!");
+    // let new2 = regex.replace(&new, b"DeathRequest(shot_fro");
+    // 
+    // regex = bytes::Regex::new(r"UserDeath_ThirdPerson\(shot_from_direction").expect("Could not create replacement regex!");
+    // let new3 = regex.replace(&new2, b"UserDeath_ThirdPerson(shot_fro");
     
     // Write new binary
     let mut file = OpenOptions::new().write(true).truncate(true).open(binary_path).expect("Could not open file!");
@@ -71,23 +72,8 @@ fn patch_game(binary_path: String) {
 }
 
 async fn run_game(binary_path: String) {
-    // let process_handle = Command::new(binary_path).spawn().expect("Failed to execute game!");
-    // process_handle.stdout.read(&mut []);
-    let stdout = Command::new(binary_path)
-        .stdout(Stdio::piped())
-        .spawn().expect("")
-        .stdout
-        .ok_or_else(|| Error::new(ErrorKind::Other,"Could not capture standard output.")).expect("Baeh");
 
-    let reader = BufReader::new(stdout);
-    for line in reader.lines() {
-        if line.expect("Haiiii") == "player_shot" {
-            send_shock().await;
-        } 
-    }
-}
 
-async fn send_shock() {
     let shocker_share_code = std::env::var("PISHOCK_SHARECODE").unwrap_or(String::new());
     let shocker_api_key = std::env::var("PISHOCK_APIKEY").unwrap_or(String::new());
     let shocker_api_username = std::env::var("PISHOCK_USERNAME").unwrap_or(String::new());
@@ -112,51 +98,63 @@ async fn send_shock() {
     );
 
     let test_pishocker_instance = pishock_account
-        .get_shocker_without_verification(shocker_share_code.clone())
+        .get_shocker(shocker_share_code.clone())
         .await
         .unwrap();
-    test_pishocker_instance
-        .shock_curve(vec![
-            ShockPoint::new(Duration::from_secs(2), 100),
-            ShockPoint::new(Duration::from_secs(3), 30),
-            ShockPoint::new(Duration::from_secs(1), 1),
-            ShockPoint::new(Duration::from_secs(3), 90),
-            ShockPoint::new(Duration::from_secs(4), 1),
-        ])
-        .await
-        .unwrap();
+    
+    
+    // let process_handle = Command::new(binary_path).spawn().expect("Failed to execute game!");
+    // process_handle.stdout.read(&mut []);
+    let stdout = Command::new(binary_path)
+        .stdout(Stdio::piped())
+        .spawn().expect("")
+        .stdout
+        .ok_or_else(|| Error::new(ErrorKind::Other,"Could not capture standard output.")).expect("Baeh");
 
-    // Get a PiShocker instance
-    let pishocker_instance: PiShocker = match pishock_account.get_shocker(shocker_share_code).await
-    {
-        Ok(pishock_instance) => pishock_instance,
-        Err(e) => {
-            error!("Failed to get PiShocker instance: {e}");
-            exit(1);
+    let reader = BufReader::new(stdout);
+    for line in reader.lines() {
+        if line.expect("Haiiii") == "player_shot" {
+            send_shock(&pishock_account, &test_pishocker_instance).await;
         }
-    };
+    }
+}
 
-    // Print all the PiShocker's details
-    println!("PiShocker details:");
-    println!("  Name: {}", pishocker_instance.get_shocker_name().unwrap());
-    println!(
-        "  Max intensity: {}",
-        pishocker_instance.get_max_intensity().unwrap()
-    );
-    println!(
-        "  Max duration: {:#?}",
-        pishocker_instance.get_max_duration().unwrap()
-    );
-    println!(
-        "  Client ID: {}",
-        pishocker_instance.get_client_id().unwrap()
-    );
-    println!(
-        "  Online: {}",
-        pishocker_instance.get_shocker_online().unwrap()
-    );
-    println!(
-        "  Paused: {}",
-        pishocker_instance.get_shocker_paused().unwrap()
-    );
+async fn send_shock(pishock_account: &PiShockAccount, test_pishocker_instance: &PiShocker) {
+    test_pishocker_instance
+        .shock(65, Duration::from_secs(1))
+        .await;
+
+    // // Get a PiShocker instance
+    // let pishocker_instance: PiShocker = match pishock_account.get_shocker(shocker_share_code).await
+    // {
+    //     Ok(pishock_instance) => pishock_instance,
+    //     Err(e) => {
+    //         error!("Failed to get PiShocker instance: {e}");
+    //         exit(1);
+    //     }
+    // };
+    // 
+    // // Print all the PiShocker's details
+    // println!("PiShocker details:");
+    // println!("  Name: {}", pishocker_instance.get_shocker_name().unwrap());
+    // println!(
+    //     "  Max intensity: {}",
+    //     pishocker_instance.get_max_intensity().unwrap()
+    // );
+    // println!(
+    //     "  Max duration: {:#?}",
+    //     pishocker_instance.get_max_duration().unwrap()
+    // );
+    // println!(
+    //     "  Client ID: {}",
+    //     pishocker_instance.get_client_id().unwrap()
+    // );
+    // println!(
+    //     "  Online: {}",
+    //     pishocker_instance.get_shocker_online().unwrap()
+    // );
+    // println!(
+    //     "  Paused: {}",
+    //     pishocker_instance.get_shocker_paused().unwrap()
+    // );
 }
